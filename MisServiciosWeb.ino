@@ -1,22 +1,51 @@
 /*
-  Arduino Yun Bridge example
-
- This example for the Arduino Yun shows how to use the
- Bridge library to access the digital and analog pins
- on the board through REST calls. It demonstrates how
- you can create your own API when using REST style
- calls through the browser.
-
- Possible commands created in this shetch:
-
- * "/arduino/digital/13"     -> digitalRead(13)
- * "/arduino/digital/13/1"   -> digitalWrite(13, HIGH)
+  Universidad Politécnica de Madrid
+  Máster Universitario en Ingeniería Web
+  
+  Implementación de Servicios Web para el Arduino Yun
+  Elaborado por Sergio Antonio Espósito Pérez
+  para el Proyecto de Fin de Máster.
+  Junio 2014
+  
+  
+  Este sketch implementa servicios de dos categorías
+  
+  1.- Control y acceso a recursos del Arduino Yun (pin digital, 
+  sensor de temperatura conectado a pin analógico, consulta
+  del estado de la red wifi ejecutando el comando Linux correspondiente
+  2.- Interfaz con el mundo exterior (envío de email vía ssmtp, envío de tweet 
+  y actualziación de status en facbook vía llamadas a scripts Python)
+  
+  Los servicios son consumidos  a través de llamadas estilo REST. 
+  La respuesta de los servicios es en fromato JSON
+  
+  Catálogo de servicios
+  =====================
+  http://ip_arduino/arduino/controlar/led/leer 
+    -->Obtiene el estado del led asociado al pin digital 13 del Arduino Yun
+    -->Respuesta tipo [{"statusled":"x"}] Donde x puede ser 0 o 1 (apagado o encendido)
+  http://ip_arduino/arduino/controlar/led/x
+    -->Apaga/enciende el led asociado al pin digital 13 del Arduino Yun (x=0 apaga el led, x=1 enciende el led)
+    -->Respuesta tipo [{"statusled":"x"}] Donde x es el estado del led luego de procesar la petición
+  http://ip_arduino/arduino/controlar/temperatura/escala
+    -->Obtiene la temperatura ambiente medida por un sensor LM35 conectado al pin analógico 1 del Arduino Yun, y la convierte a la escala indicada (escala=C Celsius, escala=F Fahrenheit)
+    -->Respuesta tipo [{"temperatura":"nn.nn"}] nn.nn=Temperatura expresada en grados de la escala solictada
+  http://ip_arduino/arduino/controlar/wifi/status
+    -->Obtiene información acerca de la red wifi a la que está conectado el Arduino Yun, ejecutando el comando /usr/bin/pretty-wifi-info.lua y capturando su salida
+    -->Respuesta tipo [{"statuswifi":"cadena"}] cadena=cadena de caracteres con información sobre la wifi
+  http://ip_arduino/arduino/email!de=origen&para=destino&asunto=cadenaasunto&texto=cadenatexto|
+    -->Envía un email desde la cuenta origen hasta la cuenta destino con el asunto y texto indicados, ejecutando el servicio ssmtp de Linux
+    -->Respuesta tipo [{Resultado":"n"}] n=0 ejecutado correctamente, n<>0 ha habido algún error
+  http://ip_arduino/arduino/twitter!texto=texto|
+    -->Escribe un tweet en el  timeline de una cuenta preconfigurada con el texto indicado, ejecutando un script Python que usa la librería de código abierto Twython
+    -->Respuesta tipo [{Resultado":"n"}] n=0 ejecutado correctamente, n<>0 ha habido algún error  
+  http://ip_arduino/arduino/facebook!texto=texto|
+    -->Actualiza el status de una cuenta Facebook preconfigurada con el texto indicado, ejecutando un script Python que usa la librería de código abierto Facebook Python SDK
+    -->Respuesta tipo [{Resultado":"n"}] n=0 ejecutado correctamente, n<>0 ha habido algún error  
  
+ Para consruir este skecth se ha tomado  ha tomado parcialmente y porteriormente modificado y adaptado código publicado en 
 
- This example code is part of the public domain
-
- http://arduino.cc/en/Tutorial/Bridge
-
+ http://arduino.cc/en/Tutorial/
  */
 
 #include <Bridge.h>
@@ -92,8 +121,8 @@ void servicios(YunClient client) {
   }
   
   
-  if (command == "twitter") {
-    twitterCommand(client);
+  if (command == "twitter" || command == "facebook") {
+    redSocialCommand(client,  command);
   }
 }  
 
@@ -154,6 +183,7 @@ void emailCommand(YunClient client) {
   String comandoShell;
   int resultado;
   String dummy;
+  YunClient auxClient;
   
   
   dataString+="From:"; 
@@ -198,16 +228,13 @@ void emailCommand(YunClient client) {
   else {
     client.println("error opening /mnt/sda1/mail.txt");
   } 
-   comandoShell = "cat /mnt/sda1/mail.txt | ssmtp " + para + " 2>&1";
-   resultado = p.runShellCommand(comandoShell);
-
-   while(p.running());  
-   
-   while (p.available()>0) {
-    char c = p.read();
-    client.print(c);
-  }
+  auxClient = client;
   
+  comandoShell = "cat /mnt/sda1/mail.txt | ssmtp " + para + " 2>&1";
+  resultado = p.runShellCommand(comandoShell);
+  while(p.running());  
+   
+  client = auxClient;
   client.print("[{\"Resultado\":");
   client.print("\"");
   client.print(resultado);
@@ -218,20 +245,18 @@ void emailCommand(YunClient client) {
 void redSocialCommand(YunClient client, String redSocial) {
   Process p;   
   int resultado;
+  YunClient auxClient;
   String command = client.readStringUntil('=');
   if (command == "texto"){
       String texto =  client.readStringUntil('|');
       p.begin("/mnt/sda1/yun" + redSocial + ".py");      
       p.addParameter(texto); 
-      resultado = p.run();
+      auxClient = client;
       
+      resultado = p.run();
       while(p.running());  
       
-      while (p.available()>0) {
-    char c = p.read();
-    client.print(c);
-  }
-   
+      client = auxClient;
       client.print("[{\"Resultado\":");
       client.print("\"");
       client.print(resultado);
