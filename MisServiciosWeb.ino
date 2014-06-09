@@ -33,13 +33,13 @@
   http://ip_arduino/arduino/controlar/wifi/status
     -->Obtiene información acerca de la red wifi a la que está conectado el Arduino Yun, ejecutando el comando /usr/bin/pretty-wifi-info.lua y capturando su salida
     -->Respuesta tipo [{"statuswifi":"cadena"}] cadena=cadena de caracteres con información sobre la wifi
-  http://ip_arduino/arduino/email!de=origen&para=destino&asunto=cadenaasunto&texto=cadenatexto|
+  http://ip_arduino/arduino/servicios/email!de=origen&para=destino&asunto=cadenaasunto&texto=cadenatexto|
     -->Envía un email desde la cuenta origen hasta la cuenta destino con el asunto y texto indicados, ejecutando el servicio ssmtp de Linux
     -->Respuesta tipo [{Resultado":"n"}] n=0 ejecutado correctamente, n<>0 ha habido algún error
-  http://ip_arduino/arduino/twitter!texto=texto|
+  http://ip_arduino/arduino/servicios/twitter!texto=texto|
     -->Escribe un tweet en el  timeline de una cuenta preconfigurada con el texto indicado, ejecutando un script Python que usa la librería de código abierto Twython
     -->Respuesta tipo [{Resultado":"n"}] n=0 ejecutado correctamente, n<>0 ha habido algún error  
-  http://ip_arduino/arduino/facebook!texto=texto|
+  http://ip_arduino/arduino/servicios/facebook!texto=texto|
     -->Actualiza el status de una cuenta Facebook preconfigurada con el texto indicado, ejecutando un script Python que usa la librería de código abierto Facebook Python SDK
     -->Respuesta tipo [{Resultado":"n"}] n=0 ejecutado correctamente, n<>0 ha habido algún error  
  
@@ -58,6 +58,7 @@
 // Listen on default port 5555, the webserver on the Yun
 // will forward there all the HTTP requests for us.
 YunServer server;
+
 
 void setup() {
   // Bridge startup
@@ -113,7 +114,7 @@ void process(YunClient client) {
 
 void servicios(YunClient client) {
   // read the command
-  String command = client.readStringUntil('!');
+  String command = client.readStringUntil('?');
 
    
   if (command == "email") {
@@ -212,7 +213,7 @@ void emailCommand(YunClient client) {
   
   dummy = client.readStringUntil('=');
     
-  texto = client.readStringUntil('|');
+  texto = client.readStringUntil('\r');
   
   dataString+=texto;
   
@@ -248,7 +249,7 @@ void redSocialCommand(YunClient client, String redSocial) {
   YunClient auxClient;
   String command = client.readStringUntil('=');
   if (command == "texto"){
-      String texto =  client.readStringUntil('|');
+      String texto =  client.readStringUntil('\r');
       p.begin("/mnt/sda1/yun" + redSocial + ".py");      
       p.addParameter(texto); 
       auxClient = client;
